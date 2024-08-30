@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/usr/pkg/bin/bash
  
 if [ -z "$1" ]; then
  

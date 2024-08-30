@@ -1,6 +1,6 @@
-#!/usr/local/bin/bash
+#!/usr/pkg/bin/bash
 
-cp $HOME/cmake/operating_system/tool-openbsd/bin/_distro__desktop_environment_and_release
+cp $HOME/cmake/operating_system/tool-netbsd/bin/_distro__desktop_environment_and_release
 
 patch_rc_file()
 {
@@ -29,13 +29,13 @@ patch_rc_file()
       echo "# ca2 patch_shell" >> $RC_FILE
       echo "" >> $RC_FILE
       echo "" >> $RC_FILE
-      echo "PATH=\$HOME/cmake/operating_system/tool-openbsd/bin:\$HOME/bin:\$PATH" >> $RC_FILE
+      echo "PATH=\$HOME/cmake/operating_system/tool-netbsd/bin:\$HOME/bin:\$PATH" >> $RC_FILE
       echo "" >> $RC_FILE
       echo "" >> $RC_FILE
       echo "export PATH" >> $RC_FILE
       echo "" >> $RC_FILE
       echo "" >> $RC_FILE
-      echo ". \$HOME/cmake/operating_system/tool-openbsd/bin/_distro__desktop_environment_and_release" >> $RC_FILE
+      echo ". \$HOME/cmake/operating_system/tool-netbsd/bin/_distro__desktop_environment_and_release" >> $RC_FILE
       echo "" >> $RC_FILE
       echo "" >> $RC_FILE
       echo ". _defer_ssh_agent" >> $RC_FILE
@@ -84,7 +84,7 @@ patch_kshrc()
 }
 
 
-. $HOME/cmake/operating_system/tool-openbsd/bin/_distro__desktop_environment_and_release
+. $HOME/cmake/operating_system/tool-netbsd/bin/_distro__desktop_environment_and_release
 
 
 patch_profile
