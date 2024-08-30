@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+
+application_build_helper --prepare-applications
+
+
+
+
