@@ -1,6 +1,5 @@
 #!/usr/pkg/bin/bash
 
-cp $HOME/cmake/operating_system/tool-netbsd/bin/_distro__desktop_environment_and_release
 
 patch_rc_file()
 {
