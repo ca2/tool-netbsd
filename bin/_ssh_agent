@@ -1,0 +1,9 @@
+
+
+eval $(ssh-agent -s) > /dev/null
+
+ssh-add ~/.ssh/id_auth &> /dev/null
+
+SSH_AGENT_ADDED=1
+
+export SSH_AGENT_ADDED
