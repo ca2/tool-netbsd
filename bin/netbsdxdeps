@@ -1,0 +1,6 @@
+#!/bin/sh
+
+
+sudo pkgin install cmake ninja-build pkgconfig git ffmpeg7 assimp MesaLib glew FreeImage
+
+
