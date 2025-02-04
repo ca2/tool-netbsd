@@ -1,0 +1,4 @@
+#!/bin/sh
+
+
+mixerctl -w outputs.master=$1

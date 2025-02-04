@@ -1,0 +1,7 @@
+#!/bin/sh
+
+
+ARCHITECTURE=`eval uname -m`
+
+
+$HOME/cmake/operating_system/tool-netbsd/bin/__ambient_$ARCHITECTURE "$@"

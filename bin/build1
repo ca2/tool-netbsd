@@ -1,0 +1,14 @@
+#!/bin/sh
+
+
+ninja -j 6 "$@"
+
+if [ $? != 0 ]; then
+
+	audioplay ~/dropbox/box/audio/sysevent/cpp_build_failed.wav &
+
+else
+
+	audioplay ~/dropbox/box/audio/sysevent/cpp_good_build.wav &
+
+fi

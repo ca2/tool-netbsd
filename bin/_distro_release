@@ -1,7 +1,0 @@
-#!/bin/sh
-
-
-ARCHITECTURE=`eval uname -m`
-
-
-_distro_release_$ARCHITECTURE

@@ -1,0 +1,15 @@
+#!/bin/ksh
+
+
+cmake -B . -S .. -G Ninja "$@" -DCMAKE_BUILD_TYPE=Debug
+
+if [ $? != 0 ]; then
+
+	audioplay ~/dropbox/box/audio/sysevent/cpp_build_failed.wav &
+
+else
+
+	audioplay ~/dropbox/box/audio/sysevent/cpp_good_build.wav &
+
+
+fi

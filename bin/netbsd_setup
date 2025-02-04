@@ -1,0 +1,6 @@
+#!/bin/sh
+
+
+sudo pkgin install bash nano sudo
+
+
