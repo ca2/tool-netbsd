@@ -1,27 +1,42 @@
 
-. $HOME/cmake/operating_system/tool-netbsd/bin/defer_ssh_agent
+if [ -z "$__SYSTEM" ]; then
 
-. ${HOME}/.ambient
+   . $HOME/application/integration/code/.ambient
 
-export __SYSTEM
-export __SYSTEM_FAMILY
-export __SYSTEM_BRANCH
-export __SYSTEM_RELEASE
-export __SYSTEM_SUDO_INSTALL
-export __SYSTEM_AMBIENT_RELEASE
-export __AMBIENT
+   # envbasename=`basename $SHELL`
 
-if [ -n "$__PATH_PREFIX" ]; then
+   # ENV="$HOME/.${envbasename}rc"
 
-#   echo "__PATH_PREFIX is $__PATH_PREFIX"
+   # export ENV
 
-   PATH=$__PATH_PREFIX:$PATH
+   export __SYSTEM
+   export __SYSTEM_FAMILY
+   export __SYSTEM_BRANCH
+   export __SYSTEM_RELEASE
+   export __SYSTEM_SUDO_INSTALL
+   export __SYSTEM_AMBIENT_RELEASE
+   export __AMBIENT
 
-#   echo "new PATH is $PATH"
+   if [ -n "$__PATH_PREFIX" ]; then
 
-   export PATH
+      #echo "__PATH_PREFIX is $__PATH_PREFIX"
+
+      PATH=$__PATH_PREFIX:$PATH
+
+      #echo "new PATH is $PATH"
+
+      export PATH
+
+   fi
 
 fi
 
+if [ -z "$SSH_AUTH_SOCK" ]; then
 
+   if [ -f "$HOME/.ssh/id_auth" ]; then
 
+      . $HOME/code/operating_system/tool/bin/defer_ssh_agent
+
+   fi
+
+fi

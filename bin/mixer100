@@ -1,0 +1,8 @@
+#!/bin/sh
+
+
+
+mixerctl -w outputs.master=255
+
+
+
