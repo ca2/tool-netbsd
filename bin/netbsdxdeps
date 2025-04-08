@@ -1,6 +1,6 @@
 #!/bin/sh
 
 
-sudo pkgin install zip cmake ninja-build pkgconf git ffmpeg7 assimp MesaLib glew freeimage mpg123 glm libv4l
+sudo pkgin install zip cmake ninja-build pkgconf git ffmpeg7 assimp MesaLib glew freeimage mpg123 glm libv4l libappindicator
 
 

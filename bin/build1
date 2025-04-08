@@ -1,7 +1,7 @@
 #!/bin/sh
 
 
-ninja -j 6 "$@"
+ninja -j 10 "$@"
 
 if [ $? != 0 ]; then
 
