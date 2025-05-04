@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if [ ! -d /nfs/$1 ]; then
+
+	mkdir /nfs/$1
+
+	if [ -d /nfs/$1 ]; then
+
+		cp -Rf $HOME/store/netbsd/* /nfs/$1
+
+	fi
+
+fi
