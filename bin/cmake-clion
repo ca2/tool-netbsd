@@ -1,0 +1,3 @@
+#!/bin/sh
+. /home/camilo/application/integration/code/_environment || exit 1
+exec /usr/pkg/bin/cmake "$@"
