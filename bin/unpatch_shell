@@ -1,7 +1,6 @@
 #!/bin/sh
 
+set -eu
 
-application_build_helper --unpatch-shell
-
-
-
+ARCHITECTURE=$(uname -m)
+exec "$HOME/code/operating_system/tool/bin/$ARCHITECTURE/application_build_helper" --unpatch-shell "$@"

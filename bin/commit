@@ -1,123 +1,1094 @@
 #!/usr/pkg/bin/bash
- 
-if [ -z "$1" ]; then
- 
-        if [ -d .git ]; then
- 
-                BASEDIR=$(pwd)
- 
-                DIR=$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]\\/]*$//'<<<"${DIR}")
- 
-        else
- 
-                if [ -f $HOME/current_working_directory.txt ]; then
- 
-                        BASEDIR=`cat $HOME/current_working_directory.txt`
- 
-                        BASEDIR=$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]\\/]*$//'<<<"${BASEDIR}")
- 
-                        BASEDIR=$(sed -e 's/^\([A-Z]\)[:]/\/\1/'<<<"${BASEDIR}")
- 
-                        BASEDIR=$(sed -e 's/\\/\//'<<<"${BASEDIR}")
- 
-                fi
- 
-                if [ -z "$BASEDIR" ]; then
- 
-                        echo "Please run command:"
-                        echo ""
-                        echo "   set_working_directory <WORKING_DIRECTORY_PATH>"
-                        echo ""
-                        echo "to set the base folder path."
-                        echo ""
-                        echo "You can also run this command from a git repository folder."
- 
-                        exit 0
- 
-                fi
- 
-        fi
- 
-else
- 
-        BASEDIR=$1
- 
+
+set -u
+
+
+DEDICATORY_FILE="$HOME/dedicatory.txt"
+PENDING_MERGES_FILE="commit_pending_merges.txt"
+
+#
+# ca2 and cpp-port repositories are writable repositories.
+#
+
+OWNED_REMOTE_REGEX='github\.com[:/](ca2|cpp-port)/'
+
+
+ERROR_COLOR=""
+SUCCESS_COLOR=""
+ERROR_RESET=""
+SUCCESS_RESET=""
+
+
+if [ -z "${NO_COLOR+x}" ] && [ "${TERM:-}" != "dumb" ]; then
+
+    if [ -t 2 ]; then
+        ERROR_COLOR=$'\033[1;31m'
+        ERROR_RESET=$'\033[0m'
+    fi
+
+    if [ -t 1 ]; then
+        SUCCESS_COLOR=$'\033[1;34m'
+        SUCCESS_RESET=$'\033[0m'
+    fi
+
 fi
- 
-path_pattern="path = *"
- 
-pushd () {
+
+
+print_error()
+{
+    printf '%s%s%s\n' \
+        "$ERROR_COLOR" \
+        "$*" \
+        "$ERROR_RESET" >&2
+}
+
+
+print_success()
+{
+    printf '%s%s%s\n' \
+        "$SUCCESS_COLOR" \
+        "$*" \
+        "$SUCCESS_RESET"
+}
+
+
+pushd()
+{
     command pushd "$@" > /dev/null
 }
- 
-popd () {
+
+
+popd()
+{
     command popd "$@" > /dev/null
 }
- 
- 
-submodule()
+
+
+is_owned_remote()
 {
- 
-        if [ -d "$1" ]; then
- 
-                pushd $1
- 
-                DIR=$(pwd)
- 
-                DIR=$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]\\/]*$//'<<<"${DIR}")
- 
-                echo "Processing $DIR..."
- 
-                if [ -f .gitmodules ]; then
- 
-                        while read line; do
- 
-                                trimmed_line=$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]\\/]*$//'<<<"${line}")
- 
-                                if [[ $trimmed_line == $path_pattern ]]; then
- 
-                                        submodule_name=$(sed -e 's/^path[[:space:]]*=[[:space:]]*//'<<<"${line}")
+    local url="$1"
 
-                                        submodule ./$submodule_name
- 
-                           	        echo "Adding submodule $submodule_name."
-
-					git add $submodule_name
- 
-                                fi
- 
-                        done < ./.gitmodules
- 
-               fi
-
-               echo 'Adding all files.'; git add -A .
-               echo 'Stashing.'; git stash
-               echo 'Applying stash.'; git stash apply
-               echo 'Readding all files.'; git add -A .
-               echo 'Committing changes.'; git commit -a -F$HOME/dedicatory.txt
-               echo 'Pushing.'; git push
- 
-               popd
- 
-#                git add -A .
-#                git commit -a -F$HOME/Desktop/dedicatory.txt
-#                git push
-
-
-      fi
- 
+    [[ "$url" =~ $OWNED_REMOTE_REGEX ]]
 }
- 
- 
-submodule $BASEDIR
- 
- 
- 
- 
 
 
-echo 'Adding main repo changes.'
-git add .
-echo 'Committing changes to main repo.'
-git commit -a -F ~/dedicatory.txt
-git push
+get_submodule_remote_url()
+{
+    local submodule_name="$1"
+    local submodule_path="$2"
+    local url
+
+
+    #
+    # `git submodule init/sync` resolves relative .gitmodules URLs
+    # against the parent's origin and stores the usable SSH URL here.
+    # Prefer that resolved value for ownership decisions.
+    #
+
+    url=$(git config \
+        --get "submodule.${submodule_name}.url" \
+        2>/dev/null || true)
+
+
+    if [ -z "$url" ] &&
+       git -C "$submodule_path" rev-parse \
+        --is-inside-work-tree \
+        >/dev/null 2>&1; then
+
+        url=$(git -C "$submodule_path" remote get-url \
+            origin \
+            2>/dev/null || true)
+
+    fi
+
+
+    if [ -z "$url" ]; then
+
+        url=$(git config \
+            --file .gitmodules \
+            --get "submodule.${submodule_name}.url" \
+            2>/dev/null || true)
+
+    fi
+
+
+    printf '%s\n' "$url"
+}
+
+
+get_branch()
+{
+    local configured_branch="${1:-}"
+    local branch
+
+
+    #
+    # Prefer branch explicitly configured by the parent.
+    #
+
+    if [ -n "$configured_branch" ] &&
+       [ "$configured_branch" != "." ]; then
+
+        printf '%s\n' "$configured_branch"
+
+        return 0
+
+    fi
+
+
+    #
+    # Current branch.
+    #
+
+    branch=$(git symbolic-ref \
+        --quiet \
+        --short HEAD \
+        2>/dev/null || true)
+
+    if [ -n "$branch" ]; then
+
+        printf '%s\n' "$branch"
+
+        return 0
+
+    fi
+
+
+    #
+    # Detached submodule: use origin default.
+    #
+
+    branch=$(git symbolic-ref \
+        --quiet \
+        --short refs/remotes/origin/HEAD \
+        2>/dev/null || true)
+
+    if [ -n "$branch" ]; then
+
+        printf '%s\n' "${branch#origin/}"
+
+        return 0
+
+    fi
+
+
+    #
+    # ca2 default.
+    #
+
+    printf '%s\n' "main"
+}
+
+
+commit_is_available_from_origin()
+{
+    local directory="$1"
+    local commit="$2"
+    local remote_tags
+
+
+    #
+    # Refresh every advertised branch. A commit reachable from one of
+    # these refs is reproducible by a fresh clone.
+    #
+
+    if ! git -C "$directory" fetch \
+        --prune \
+        origin \
+        '+refs/heads/*:refs/remotes/origin/*'; then
+
+        return 1
+
+    fi
+
+
+    if git -C "$directory" for-each-ref \
+        --format='%(refname)' \
+        --contains="$commit" \
+        refs/remotes/origin |
+        grep -q .; then
+
+        return 0
+
+    fi
+
+
+    #
+    # Also accept commits directly advertised by lightweight or
+    # annotated tags. The peeled ^{} line is the commit for an
+    # annotated tag.
+    #
+
+    remote_tags=$(git -C "$directory" ls-remote \
+        --tags \
+        origin \
+        2>/dev/null || true)
+
+
+    if printf '%s\n' "$remote_tags" |
+        awk '{print $1}' |
+        grep -Fqx -- "$commit"; then
+
+        return 0
+
+    fi
+
+
+    return 1
+}
+
+
+verify_external_submodule_commit()
+{
+    local submodule_path="$1"
+    local submodule_url="$2"
+    local commit
+
+
+    commit=$(git -C "$submodule_path" rev-parse HEAD)
+
+
+    echo "Verifying external submodule commit is published:"
+    echo "   $submodule_path"
+    echo "   $commit"
+
+
+    if commit_is_available_from_origin \
+        "$submodule_path" \
+        "$commit"; then
+
+        return 0
+
+    fi
+
+
+    echo
+    print_error "ERROR: External submodule commit is not reachable from"
+    echo "any branch or tag advertised by its origin:"
+    echo "   Path   : $submodule_path"
+    echo "   URL    : $submodule_url"
+    echo "   Commit : $commit"
+    echo
+    echo "Refusing to record this unreproducible gitlink."
+
+
+    return 1
+}
+
+
+verify_published_head()
+{
+    local branch="$1"
+    local local_commit
+    local remote_commit
+
+
+    local_commit=$(git rev-parse HEAD)
+
+    remote_commit=$(git ls-remote \
+        --heads \
+        origin \
+        "refs/heads/$branch" |
+        awk 'NR == 1 { print $1 }')
+
+
+    if [ "$remote_commit" = "$local_commit" ]; then
+
+        return 0
+
+    fi
+
+
+    echo
+    print_error "ERROR: Push returned without publishing the exact local HEAD."
+    echo "   Branch        : $branch"
+    echo "   Local HEAD    : $local_commit"
+    echo "   Remote branch : ${remote_commit:-<missing>}"
+
+
+    return 1
+}
+
+
+#
+# ----------------------------------------------------------------------
+# PHASE 1
+#
+# Commit local work recursively, bottom-to-top.
+#
+# NO PUSHING happens in this phase.
+# ----------------------------------------------------------------------
+#
+
+commit_repository()
+{
+    local directory="$1"
+
+    local git_root
+    local key
+    local submodule_path
+    local submodule_name
+    local submodule_url
+
+
+    pushd "$directory" || return 1
+
+
+    git_root=$(git rev-parse \
+        --show-toplevel \
+        2>/dev/null || true)
+
+
+    if [ -z "$git_root" ]; then
+
+        print_error "ERROR: Not a Git repository:"
+        echo "   $directory"
+
+        popd
+
+        return 1
+
+    fi
+
+
+    cd "$git_root" || {
+
+        popd
+
+        return 1
+
+    }
+
+
+    echo
+    echo "============================================================"
+    echo "Committing repository:"
+    echo "   $git_root"
+    echo "============================================================"
+
+
+    #
+    # CHILDREN FIRST.
+    #
+
+    if [ -f .gitmodules ]; then
+
+        while IFS=' ' read -r key submodule_path; do
+
+            if [ -z "${key:-}" ] ||
+               [ -z "${submodule_path:-}" ]; then
+
+                continue
+
+            fi
+
+
+            submodule_name="${key#submodule.}"
+            submodule_name="${submodule_name%.path}"
+
+
+            submodule_url=$(get_submodule_remote_url \
+                "$submodule_name" \
+                "$submodule_path")
+
+
+            if [ ! -d "$submodule_path" ]; then
+
+                continue
+
+            fi
+
+
+            if ! git -C "$submodule_path" \
+                rev-parse \
+                --is-inside-work-tree \
+                >/dev/null 2>&1; then
+
+                continue
+
+            fi
+
+
+            if is_owned_remote "$submodule_url"; then
+
+                echo
+                echo "Descending into owned submodule:"
+                echo "   $submodule_path"
+
+
+                if ! commit_repository "$submodule_path"; then
+
+                    popd
+
+                    return 1
+
+                fi
+
+            else
+
+                echo
+                echo "External submodule:"
+                echo "   $submodule_path"
+                echo "Not committing inside it."
+
+
+                if ! verify_external_submodule_commit \
+                    "$submodule_path" \
+                    "$submodule_url"; then
+
+                    popd
+
+                    return 1
+
+                fi
+
+            fi
+
+
+        done < <(
+            git config \
+                --file .gitmodules \
+                --get-regexp '^submodule\..*\.path$' \
+                2>/dev/null || true
+        )
+
+    fi
+
+
+    #
+    # Stage this repository's ordinary files and changed gitlinks only
+    # after every child has completed successfully. If a later sibling
+    # fails, the parent index remains untouched and checkout can repair
+    # the tree on the next convergence cycle.
+    #
+
+    if ! git add -A -- .; then
+
+        popd
+
+        return 1
+
+    fi
+
+
+    if git diff --cached --quiet; then
+
+        echo "No local changes to commit."
+
+    else
+
+        if [ ! -f "$DEDICATORY_FILE" ]; then
+
+            echo
+            print_error "ERROR: Commit message file does not exist:"
+            echo "   $DEDICATORY_FILE"
+
+            popd
+
+            return 1
+
+        fi
+
+
+        echo "Committing local changes."
+
+
+        if ! git commit \
+            -F "$DEDICATORY_FILE"; then
+
+            echo
+            print_error "ERROR: Commit failed:"
+            echo "   $git_root"
+
+            popd
+
+            return 1
+
+        fi
+
+    fi
+
+
+    popd
+
+    return 0
+}
+
+
+#
+# ----------------------------------------------------------------------
+# PHASE 2
+#
+# Detect repositories that need remote history merged.
+# ----------------------------------------------------------------------
+#
+
+append_pending_merge()
+{
+    local relative_path="$1"
+
+
+    if [ -z "$relative_path" ]; then
+        return
+    fi
+
+
+    if ! grep -Fqx \
+        -- "$relative_path" \
+        "$ROOT_PENDING_FILE" \
+        2>/dev/null; then
+
+        printf '%s\n' "$relative_path" \
+            >> "$ROOT_PENDING_FILE"
+
+    fi
+}
+
+
+repository_requires_merge()
+{
+    local configured_branch="${1:-}"
+
+    local branch
+    local remote_ref
+
+
+    branch=$(get_branch "$configured_branch")
+
+    remote_ref="refs/remotes/origin/$branch"
+
+
+    echo "Fetching origin/$branch..."
+
+
+    if ! git fetch origin "$branch"; then
+
+        echo "WARNING: Could not fetch origin/$branch."
+
+        return 2
+
+    fi
+
+
+    if ! git show-ref \
+        --verify \
+        --quiet "$remote_ref"; then
+
+        #
+        # No remote branch yet.
+        #
+
+        return 1
+
+    fi
+
+
+    #
+    # If remote is already an ancestor of local HEAD, no merge is needed.
+    #
+
+    if git merge-base \
+        --is-ancestor \
+        "$remote_ref" \
+        HEAD; then
+
+        return 1
+
+    fi
+
+
+    #
+    # Remote contains commits that HEAD doesn't contain.
+    #
+
+    return 0
+}
+
+
+preflight_repository()
+{
+    local directory="$1"
+    local root_relative_path="$2"
+    local configured_branch="${3:-}"
+
+    local git_root
+    local current_remote
+
+    local key
+    local submodule_path
+    local submodule_name
+    local submodule_url
+    local submodule_branch
+    local child_relative_path
+    local merge_status
+
+
+    pushd "$directory" || return 1
+
+
+    git_root=$(git rev-parse \
+        --show-toplevel \
+        2>/dev/null || true)
+
+
+    if [ -z "$git_root" ]; then
+
+        popd
+
+        return 1
+
+    fi
+
+
+    cd "$git_root" || {
+
+        popd
+
+        return 1
+
+    }
+
+
+    echo
+    echo "Preflight:"
+    echo "   $git_root"
+
+
+    current_remote=$(git remote get-url \
+        origin \
+        2>/dev/null || true)
+
+
+    if is_owned_remote "$current_remote"; then
+
+        repository_requires_merge "$configured_branch"
+
+        merge_status=$?
+
+
+        if [ "$merge_status" -eq 0 ]; then
+
+            if [ -n "$root_relative_path" ]; then
+
+                echo "PENDING MERGE:"
+                echo "   $root_relative_path"
+
+                append_pending_merge \
+                    "$root_relative_path"
+
+            else
+
+                #
+                # Root itself cannot be represented as an ordinary
+                # submodule path. Use ".".
+                #
+
+                echo "PENDING MERGE:"
+                echo "   ."
+
+                append_pending_merge "."
+
+            fi
+
+        elif [ "$merge_status" -eq 2 ]; then
+
+            echo
+            print_error "ERROR: Preflight could not verify the remote branch."
+
+            popd
+
+            return 1
+
+        fi
+
+    fi
+
+
+    #
+    # Recurse through owned submodules.
+    #
+
+    if [ -f .gitmodules ]; then
+
+        while IFS=' ' read -r key submodule_path; do
+
+            if [ -z "${key:-}" ] ||
+               [ -z "${submodule_path:-}" ]; then
+
+                continue
+
+            fi
+
+
+            submodule_name="${key#submodule.}"
+            submodule_name="${submodule_name%.path}"
+
+
+            submodule_url=$(get_submodule_remote_url \
+                "$submodule_name" \
+                "$submodule_path")
+
+
+            submodule_branch=$(git config \
+                --file .gitmodules \
+                --get "submodule.${submodule_name}.branch" \
+                2>/dev/null || true)
+
+
+            if ! is_owned_remote "$submodule_url"; then
+
+                continue
+
+            fi
+
+
+            if [ ! -d "$submodule_path" ]; then
+
+                continue
+
+            fi
+
+
+            if [ -z "$root_relative_path" ]; then
+
+                child_relative_path="$submodule_path"
+
+            elif [ "$root_relative_path" = "." ]; then
+
+                child_relative_path="$submodule_path"
+
+            else
+
+                child_relative_path="$root_relative_path/$submodule_path"
+
+            fi
+
+
+            if ! preflight_repository \
+                "$submodule_path" \
+                "$child_relative_path" \
+                "$submodule_branch"; then
+
+                popd
+
+                return 1
+
+            fi
+
+
+        done < <(
+            git config \
+                --file .gitmodules \
+                --get-regexp '^submodule\..*\.path$' \
+                2>/dev/null || true
+        )
+
+    fi
+
+
+    popd
+
+    return 0
+}
+
+
+#
+# ----------------------------------------------------------------------
+# PHASE 3
+#
+# Push recursively, bottom-to-top.
+#
+# Only called when no pending merges exist.
+# ----------------------------------------------------------------------
+#
+
+push_repository()
+{
+    local directory="$1"
+    local configured_branch="${2:-}"
+
+    local git_root
+    local branch
+
+    local key
+    local submodule_path
+    local submodule_name
+    local submodule_url
+    local submodule_branch
+
+
+    pushd "$directory" || return 1
+
+
+    git_root=$(git rev-parse \
+        --show-toplevel \
+        2>/dev/null || true)
+
+
+    if [ -z "$git_root" ]; then
+
+        popd
+
+        return 1
+
+    fi
+
+
+    cd "$git_root" || {
+
+        popd
+
+        return 1
+
+    }
+
+
+    #
+    # CHILDREN FIRST.
+    #
+
+    if [ -f .gitmodules ]; then
+
+        while IFS=' ' read -r key submodule_path; do
+
+            if [ -z "${key:-}" ] ||
+               [ -z "${submodule_path:-}" ]; then
+
+                continue
+
+            fi
+
+
+            submodule_name="${key#submodule.}"
+            submodule_name="${submodule_name%.path}"
+
+
+            submodule_url=$(get_submodule_remote_url \
+                "$submodule_name" \
+                "$submodule_path")
+
+
+            submodule_branch=$(git config \
+                --file .gitmodules \
+                --get "submodule.${submodule_name}.branch" \
+                2>/dev/null || true)
+
+
+            if ! is_owned_remote "$submodule_url"; then
+
+                continue
+
+            fi
+
+
+            if [ ! -d "$submodule_path" ]; then
+
+                continue
+
+            fi
+
+
+            if ! push_repository \
+                "$submodule_path" \
+                "$submodule_branch"; then
+
+                popd
+
+                return 1
+
+            fi
+
+
+        done < <(
+            git config \
+                --file .gitmodules \
+                --get-regexp '^submodule\..*\.path$' \
+                2>/dev/null || true
+        )
+
+    fi
+
+
+    branch=$(get_branch "$configured_branch")
+
+
+    echo
+    echo "Pushing:"
+    echo "   $git_root"
+    echo "to:"
+    echo "   origin/$branch"
+
+
+    if ! git push \
+        --recurse-submodules=check \
+        origin \
+        "HEAD:$branch"; then
+
+        echo
+        print_error "ERROR: Push failed:"
+        echo "   $git_root"
+
+        popd
+
+        return 1
+
+    fi
+
+
+    if ! verify_published_head "$branch"; then
+
+        popd
+
+        return 1
+
+    fi
+
+
+    popd
+
+    return 0
+}
+
+
+#
+# ----------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------
+#
+
+if [ $# -ge 1 ]; then
+
+    BASEDIR="$1"
+
+else
+
+    BASEDIR=$(git rev-parse \
+        --show-toplevel \
+        2>/dev/null || true)
+
+fi
+
+
+if [ -z "${BASEDIR:-}" ]; then
+
+    print_error "ERROR: Current directory is not inside a Git repository."
+
+    exit 1
+
+fi
+
+
+pushd "$BASEDIR" || exit 1
+
+BASEDIR=$(git rev-parse \
+    --show-toplevel \
+    2>/dev/null || true)
+
+popd
+
+
+if [ -z "$BASEDIR" ]; then
+
+    print_error "ERROR: Specified directory is not inside a Git repository."
+
+    exit 1
+
+fi
+
+
+ROOT_PENDING_FILE="$BASEDIR/$PENDING_MERGES_FILE"
+
+
+#
+# Prevent the operational file itself from being committed.
+#
+
+rm -f "$ROOT_PENDING_FILE"
+
+
+echo
+echo "============================================================"
+echo "PHASE 1: Committing local changes recursively"
+echo "============================================================"
+
+
+if ! commit_repository "$BASEDIR"; then
+
+    echo
+    print_error "ERROR: Recursive commit phase failed."
+
+    exit 1
+
+fi
+
+
+echo
+echo "============================================================"
+echo "PHASE 2: Checking for pending remote merges"
+echo "============================================================"
+
+
+: > "$ROOT_PENDING_FILE"
+
+
+if ! preflight_repository \
+    "$BASEDIR" \
+    "" \
+    ""; then
+
+    echo
+    print_error "ERROR: Recursive preflight failed. Nothing was pushed."
+
+    exit 1
+
+fi
+
+
+if [ -s "$ROOT_PENDING_FILE" ]; then
+
+    echo
+    echo "============================================================"
+    echo "Local changes have been committed successfully."
+    echo
+    echo "Push postponed because these repositories need merging:"
+    echo
+
+    cat "$ROOT_PENDING_FILE"
+
+    echo
+    echo "Pending merge list:"
+    echo "   $ROOT_PENDING_FILE"
+    echo
+    echo "Run the merge wizard, then run commit again."
+    echo "============================================================"
+
+    exit 2
+
+fi
+
+
+rm -f "$ROOT_PENDING_FILE"
+
+
+echo
+echo "============================================================"
+echo "PHASE 3: No pending merges. Pushing recursively."
+echo "============================================================"
+
+
+if ! push_repository \
+    "$BASEDIR" \
+    ""; then
+
+    echo
+    print_error "ERROR: Recursive push phase failed."
+
+    exit 1
+
+fi
+
+
+echo
+print_success "============================================================"
+print_success "Recursive commit and push completed successfully."
+print_success "============================================================"

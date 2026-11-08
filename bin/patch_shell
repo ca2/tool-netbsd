@@ -1,14 +1,6 @@
 #!/bin/sh
 
-mkdir -p "$HOME/bin"
+set -eu
 
-ARCHITECTURE=`eval uname -m`
-
-cp $HOME/code/operating_system/tool/bin/application_build_helper_$ARCHITECTURE $HOME/bin/application_build_helper
-
-$HOME/code/operating_system/tool/bin/__ambient_$ARCHITECTURE --id-payload-listing > $HOME/.ambient
-
-$HOME/bin/application_build_helper --patch-shell
-
-
-
+ARCHITECTURE=$(uname -m)
+exec "$HOME/code/operating_system/tool/bin/$ARCHITECTURE/application_build_helper" --patch-shell "$@"
