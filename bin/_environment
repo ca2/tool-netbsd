@@ -1,0 +1,23 @@
+# Source this file from shell startup or a remote toolchain environment script.
+if [ -r "$HOME/application/integration/code/.operating_system_summary" ]; then
+    . "$HOME/application/integration/code/.operating_system_summary"
+    export __SYSTEM __SYSTEM_FAMILY __SYSTEM_BRANCH __SYSTEM_RELEASE
+    export __SYSTEM_ARCHITECTURE __SYSTEM_AMBIENT_RELEASE_ARCHITECTURE
+    export __SYSTEM_SUDO_INSTALL __SYSTEM_STANDARD_PACKAGE_FILE_EXTENSION __AMBIENT
+    # Prefix each directory once, preserving the configured order.
+    ca2_old_ifs=$IFS
+    IFS=:
+    ca2_new_prefix=
+    for ca2_directory in ${__PATH_PREFIX-}; do
+        case ":${PATH-}:" in
+            *":$ca2_directory:"*) ;;
+            *) ca2_new_prefix=${ca2_new_prefix:+$ca2_new_prefix:}$ca2_directory ;;
+        esac
+    done
+    IFS=$ca2_old_ifs
+    if [ -n "$ca2_new_prefix" ]; then
+        PATH=$ca2_new_prefix${PATH:+:$PATH}
+    fi
+    export PATH
+    unset ca2_old_ifs ca2_new_prefix ca2_directory
+fi

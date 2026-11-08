@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/usr/pkg/bin/bash
 
 
 #BASE_DIR=`pwd`
@@ -7,8 +7,8 @@
 
 #find . -name application.txt -print > $APPLICATION_LIST_FILE_PATH
 
-application_build_helper --application-list
 
+application_build_helper --application-list
 
 
 
