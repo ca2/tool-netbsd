@@ -31,12 +31,4 @@ if [ -z "$__SYSTEM" ]; then
 
 fi
 
-if [ -z "$SSH_AUTH_SOCK" ]; then
-
-   if [ -f "$HOME/.ssh/id_auth" ]; then
-
-      . $HOME/code/operating_system/tool/bin/defer_ssh_agent
-
-   fi
-
-fi
+. "$HOME/code/operating_system/tool/bin/defer_ssh_agent"

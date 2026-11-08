@@ -1,9 +1,46 @@
+# Source this file so the agent environment remains in the calling shell.
+ca2_defer_ssh_agent()
+{
+    [ -f "$HOME/.ssh/id_auth" ] || return 0
+    command -v ssh-agent >/dev/null 2>&1 || return 0
+    command -v ssh-add >/dev/null 2>&1 || return 0
 
+    # ssh-add returns 1 for a reachable agent with no identities, 2 if absent.
+    ssh-add -l >/dev/null 2>&1
+    ca2_agent_status=$?
+    if [ "$ca2_agent_status" -gt 1 ]; then
+        if [ -r "$HOME/.ssh/ca2-agent.env" ]; then
+            . "$HOME/.ssh/ca2-agent.env"
+        fi
+        ssh-add -l >/dev/null 2>&1
+        ca2_agent_status=$?
+        if [ "$ca2_agent_status" -gt 1 ]; then
+            eval "$(ssh-agent -s)" >/dev/null || return 1
+            # Keep one agent available across logins, with private state files.
+            (umask 077
+             printf 'SSH_AUTH_SOCK=%s; export SSH_AUTH_SOCK\nSSH_AGENT_PID=%s; export SSH_AGENT_PID\n' \
+                 "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" > "$HOME/.ssh/ca2-agent.env") || return 1
+        fi
+    fi
 
-if [ -s "$SSH_AUTH_SOCK" ]; then
+    # Avoid prompting again if this key is already present in the agent.
+    if [ -r "$HOME/.ssh/id_auth.pub" ]; then
+        ca2_key_fingerprint=$(ssh-keygen -lf "$HOME/.ssh/id_auth.pub" 2>/dev/null | awk '{print $2}')
+        if [ -n "$ca2_key_fingerprint" ] &&
+           ssh-add -l 2>/dev/null | grep -Fq -- "$ca2_key_fingerprint"; then
+            return 0
+        fi
+    fi
 
-	eval $(ssh-agent -s) > /dev/null
-	ssh-add ~/.ssh/id_auth &> /dev/null
-	#ssh-add ~/.ssh/id_sign &> /dev/null
+    if [ -t 0 ]; then
+        ssh-add "$HOME/.ssh/id_auth"
+    else
+        # A noninteractive shell must not open an askpass window or hang.
+        SSH_ASKPASS_REQUIRE=never ssh-add "$HOME/.ssh/id_auth" </dev/null >/dev/null 2>&1
+    fi
+}
 
-fi
+# Missing or locked keys must not prevent a shell from starting.
+ca2_defer_ssh_agent || :
+unset ca2_agent_status ca2_key_fingerprint
+unset -f ca2_defer_ssh_agent

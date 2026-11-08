@@ -26,3 +26,5 @@ if [ -n "$__PATH_PREFIX" ]; then
    export PATH
 
 fi
+
+. "$HOME/code/operating_system/tool/bin/defer_ssh_agent"
